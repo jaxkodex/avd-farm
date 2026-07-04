@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Test
+        run: go test ./...
+
+      - name: Compute version
+        id: version
+        run: echo "version=v0.1.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Build CLI binaries
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          mkdir -p dist
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
+            os="${target%/*}" arch="${target#*/}"
+            ext=""; [ "$os" = "windows" ] && ext=".exe"
+            GOOS="$os" GOARCH="$arch" \
+              go build -trimpath -ldflags='-s -w' -o "dist/avd_${os}_${arch}${ext}" ./cmd/avd
+          done
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          docker build -t "$IMAGE:$version" -t "$IMAGE:latest" .
+          docker push "$IMAGE:$version"
+          docker push "$IMAGE:latest"
+
+      - name: Save image as release asset
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          docker save "$IMAGE:$version" | gzip > "dist/avd-farm-image_${version}_linux_amd64.tar.gz"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          gh release create "$version" dist/* \
+            --title "$version" \
+            --generate-notes \
+            --notes "Server image: \`$IMAGE:$version\` (also attached as a tarball — \`docker load\` it). CLI binaries attached per OS/arch."

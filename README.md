@@ -139,10 +139,23 @@ Note the API is bound to `127.0.0.1` on the host — `avd-farm` is meant to sit
 | `AVD_SNAPSHOT`        | `golden`       | Name of the QuickBoot snapshot to boot from.            |
 | `AVD_GPU`             | `swiftshader`  | Render mode: `swiftshader` or `host`.                   |
 | `AVD_PUBLISH_HOST`    | —              | Host/address embedded in the `adb`/`screen` responses.  |
+| `AVD_DEVICE_MEMORY`   | `4g`           | Per-device container memory cap (`--memory`).           |
+| `AVD_BOOT_TIMEOUT`    | `3m`           | How long to wait for `sys.boot_completed` before giving up (504). |
 
 Each device is bound to a TTL at start; a background **reaper** destroys any
 device whose TTL expires or that has been idle too long. This is the backstop
 that guarantees a dropped client never strands a running device.
+
+### Emulator image contract
+
+The emulator image (`AVD_EMULATOR_IMAGE`) is an external dependency — this repo
+does not build it. `avdd` assumes the image:
+
+- boots the emulator from the QuickBoot snapshot named in the `SNAPSHOT` env var;
+- exposes ADB on container port `5555` and noVNC on `6080`;
+- honors the `GPU_MODE` (`swiftshader`|`host`), `SNAPSHOT`, and `API_LEVEL` env vars;
+- ships `adb` inside the container, so `avdd` can poll
+  `getprop sys.boot_completed` via `docker exec` to detect readiness.
 
 ---
 

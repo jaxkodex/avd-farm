@@ -193,6 +193,37 @@ func TestStopFreesPortsAndRemoves(t *testing.T) {
 	}
 }
 
+func TestConcurrentTeardownFreesPortsOnce(t *testing.T) {
+	fd := &fakeDocker{}
+	m := newTestManager(testConfig(), fd)
+	dev, err := m.Start(context.Background(), StartRequest{API: 34})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	// Race two teardowns (e.g. DELETE vs reaper); only one may free ports.
+	var wg sync.WaitGroup
+	for range 2 {
+		wg.Add(1)
+		go func() { defer wg.Done(); m.teardown(dev) }()
+	}
+	wg.Wait()
+
+	// If the second teardown also freed, allocating both pools twice would
+	// succeed on a 2-port pool that had one port claimed by a new device.
+	next, err := m.Start(context.Background(), StartRequest{API: 34})
+	if err != nil {
+		t.Fatalf("Start after teardown: %v", err)
+	}
+	m.teardown(dev) // stale re-teardown must not free next's ports
+	if _, err := m.Get(next.ID); err != nil {
+		t.Fatalf("live device lost after stale teardown: %v", err)
+	}
+	if m.adb.InUse() != 1 || m.vnc.InUse() != 1 {
+		t.Errorf("ports in use = %d/%d, want 1/1", m.adb.InUse(), m.vnc.InUse())
+	}
+}
+
 func TestReapExpired(t *testing.T) {
 	fd := &fakeDocker{}
 	m := newTestManager(testConfig(), fd)

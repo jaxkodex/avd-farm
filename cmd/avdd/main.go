@@ -41,8 +41,9 @@ func main() {
 	go mgr.RunReaper(ctx, 30*time.Second)
 
 	srv := &http.Server{
-		Addr:    cfg.Bind,
-		Handler: api.New(cfg, mgr).Handler(),
+		Addr:              cfg.Bind,
+		Handler:           api.New(cfg, mgr).Handler(),
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 	go func() {
 		<-ctx.Done()

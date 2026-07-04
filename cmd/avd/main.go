@@ -237,6 +237,9 @@ func cmdADB(c *client, args []string) error {
 	if err := c.do(http.MethodGet, "/devices/"+id, nil, &d); err != nil {
 		return err
 	}
+	// A TCP target must be connected before -s can address it; best-effort,
+	// since it may already be connected from a previous invocation.
+	exec.Command("adb", "connect", d.ADB).Run()
 	cmd := exec.Command("adb", append([]string{"-s", d.ADB}, rest...)...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	return cmd.Run()

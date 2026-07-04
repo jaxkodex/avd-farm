@@ -109,6 +109,11 @@ func (m *Manager) Start(ctx context.Context, req StartRequest) (*Device, error) 
 	}
 
 	m.mu.Lock()
+	if _, ok := m.devices[dev.ID]; !ok {
+		// A concurrent Stop/reap tore the device down while it was booting.
+		m.mu.Unlock()
+		return nil, ErrNotFound
+	}
 	dev.State = "ready"
 	m.mu.Unlock()
 	return dev, nil
@@ -202,8 +207,18 @@ func (m *Manager) Stop(id string) error {
 }
 
 // teardown removes the container (best-effort), then releases ports and the
-// device table entry.
+// device table entry. It claims the device by deleting it from the table
+// first, so concurrent teardowns (e.g. DELETE racing the reaper) cannot
+// double-free ports that may already belong to a new device.
 func (m *Manager) teardown(dev *Device) {
+	m.mu.Lock()
+	if _, ok := m.devices[dev.ID]; !ok {
+		m.mu.Unlock()
+		return
+	}
+	delete(m.devices, dev.ID)
+	m.mu.Unlock()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := m.docker.Remove(ctx, containerName(dev.ID)); err != nil {
@@ -213,7 +228,6 @@ func (m *Manager) teardown(dev *Device) {
 	defer m.mu.Unlock()
 	m.adb.Free(dev.ADBPort)
 	m.vnc.Free(dev.VNCPort)
-	delete(m.devices, dev.ID)
 }
 
 // Get returns one device by id.

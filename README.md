@@ -138,7 +138,7 @@ Note the API is bound to `127.0.0.1` on the host — `avd-farm` is meant to sit
 | `AVD_EMULATOR_IMAGE`  | —              | The emulator container image to launch.                 |
 | `AVD_SNAPSHOT`        | `golden`       | Name of the QuickBoot snapshot to boot from.            |
 | `AVD_GPU`             | `swiftshader`  | Render mode: `swiftshader` or `host`.                   |
-| `AVD_PUBLISH_HOST`    | —              | Host/address embedded in the `adb`/`screen` responses.  |
+| `AVD_PUBLISH_HOST`    | —              | Host/address embedded in the `adb`/`screen` responses. Device ports are also bound to it, so it must be an IP assigned to a host interface (typically the private/overlay address clients reach the host on). |
 | `AVD_DEVICE_MEMORY`   | `4g`           | Per-device container memory cap (`--memory`).           |
 | `AVD_BOOT_TIMEOUT`    | `3m`           | How long to wait for `sys.boot_completed` before giving up (504). |
 
